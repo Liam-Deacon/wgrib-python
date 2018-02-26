@@ -21,6 +21,11 @@ try:
 except ImportError:
     from setuptools import Extension
 
+try:
+    import glob2 as glob
+except ImportError:
+    import glob
+
 here = path.abspath(path.dirname(__file__))
 
 scripts_dir = here + '/' + 'scripts/'
@@ -231,6 +236,7 @@ setup(
     # installed, specify them here.  If using Python 2.6 or less, then these
     # have to be included in MANIFEST.in as well.
     package_data={
+        path.join('src', 'grib2'): glob.iglob('src/**/*', recursive=True),
         path.join('scripts', 'wgrib'): path.join(here, 'scripts', grib_exe)
     },
 
@@ -239,7 +245,7 @@ setup(
     # http://docs.python.org/3.4/distutils/setupscript.html#installing-additional-files # noqa
     # In this case, 'data_file' will be installed into '<sys.prefix>/my_data'
     data_files=[(path.join('data', 'static'), 
-                 glob(path.join(here, 'data', 'static', '*')))],
+                 glob.glob(path.join(here, 'data', 'static', '*')))],
 
     #scripts=[path.join('scripts', grib_exe)],
 
