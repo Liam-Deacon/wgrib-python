@@ -11,7 +11,7 @@ from os import path
 from tempfile import gettempdir
 
 from six.moves import urllib
-from io import BytesIO
+from io import BytesIO, StringIO
 
 # Always prefer setuptools over distutils
 from setuptools import Extension, find_packages, setup
@@ -31,24 +31,26 @@ else:
 # get (and slightly modify) wgrib source
 wgrib_url = 'ftp://ftp.cpc.ncep.noaa.gov/wd51we/wgrib/wgrib.c'
 wgrib2_url = 'ftp://ftp.cpc.ncep.noaa.gov/wd51we/wgrib2/wgrib2.tgz'
-define = '''
-#ifndef WGRIB_MAIN
-#define WGRIB_MAIN main
+define = b'''
+#ifndef GRIB_MAIN
+#define GRIB_MAIN main
 #endif
 
 '''
 if not os.path.exists(here + '/src/wgrib.c'):
     print('Downloading wgrib source code...')
-    with urllib.request.urlopen(wgrib_url) as request, \
-            open(here + '/src/wgrib.c', 'wb') as wgrib_src:
+    request = urllib.request.urlopen(wgrib_url)
+    with open(here + '/src/wgrib.c', 'wb') as wgrib_src:
         src = BytesIO(request.read())
-        c_main = 'int main(int argc, char **argv)'
-        wgrib_src.write(src.getvalue().replace(c_main, define + c_main))
+        c_main = b'int main(int argc, char **argv)'
+        wgrib_src.write(src.getvalue().replace(c_main, define + c_main.replace(b'main', b'GRIB_MAIN')))
 
-if not os.path.isdir(here + 'src/grib2'):
+if not os.path.isdir(here + '/src/grib2'):
     print('Downloading wgrib2 source code...')
-    with urllib.request.urlopen(wgrib2_url) as request:
-        tar = tarfile.open(fileobj=request, mode='r:gz').extractall(path=here + '/src')
+    request = urllib.request.urlopen(wgrib2_url)
+    wgrib2_tgz = BytesIO(request.read())
+    wgrib2_tgz.seek(0)
+    tar = tarfile.open(fileobj=wgrib2_tgz, mode='r:gz').extractall(path=here + '/src')
 
 
 # build native executables - have to get hands a little dirty
@@ -85,7 +87,7 @@ if 'build_ext' in sys.argv:
                            extra_postargs=['/DLL', '/INCLUDE:wgrib_main', '/EXPORT:wgrib_main'] if isWindows() else [])
         
         print('Building wgrib2...')
-        os.environ['CC'] = os.environ.get('CC', cc.compiler)
+        os.environ['CC'] = os.environ.get('CC', cc.compiler[0])
         os.environ['FC'] = os.environ.get('FC', fc.command_vars.get('compiler_f90') or fc.command_vars.get('compiler_f77'))
         try:
             curdir = os.path.abspath('.')
@@ -107,7 +109,7 @@ grib_ext = Extension('wgrib.wgrib_c_ext', sources=['src/wgrib.c', 'src/pywgrib.c
 with open(path.join(here, 'README.md'), encoding='utf-8') as f:
     long_description = f.read()
 
-with open(path.join(here, 'LICENSE'), encoding='utf-8') as f:
+with open(path.join(here, 'LICENSE.txt'), encoding='utf-8') as f:
     license = f.readlines()
 
 with open(path.join(here, 'VERSION'), encoding='utf-8') as f:
