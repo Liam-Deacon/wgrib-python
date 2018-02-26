@@ -8,6 +8,15 @@ To build please run:
 
 ```pip install wgrib-python```
 
+For configuring wgrib2, `CC` and `FC` environment variables need to set prior to calling `pip`, e.g.
+
+```bash
+
+export CC=gcc-7
+export FC=gfortran-7
+
+```
+
 Example
 -------
 

@@ -1,5 +1,8 @@
 import sys
 
-from .lib import wgrib_main as main
+try:
+    from .wgrib2 import main
+except ImportError:
+    from .wgrib import main
 
 main(sys.argv)
