@@ -1,93 +1,37 @@
 /* Dumb Python C extension wrapper around wgrib */
+#include <stdlib.h>
 
 #ifdef _WIN32
-#include<Python.h>
+#include <Python.h>
 #else
-#include<Python/Python.h>
+#include <Python/Python.h>
 #endif
 
-#include<stdlib.h>
-#include<string.h>
+// forward declare wgrib entry point
+int wgrib(int argc, char **argv);
 
-#ifndef C_MAXARGS
-#define C_MAXARGS 1000 /* large but not infinite... */
-#endif
 
-//Forward declare wgrib_main
-int GRIB_MAIN(int argc, char **argv);
+static const char *convertToCharArray(PyObject *py_val) {
+    /* Performs naive conversion of python utf8/byte string to char array
+    Returns pointer to 
+    */
+    PyObject *s = NULL;
+    const char *converted_string = NULL;
 
-/**
- * Split a line into separate words.
- * 
- * Note: Taken from: https://stackoverflow.com/questions/5534620/mimicking-the-shell-argument-parser-in-c
- */
-static void splitLine(char *pLine, char **pArgs) {
-    char *pTmp = strchr(pLine, ' ');
-
-    if (pTmp) {
-        *pTmp = '\0';
-        pTmp++;
-        while ((*pTmp) && (*pTmp == ' ')) {
-            pTmp++;
-        }
-        if (*pTmp == '\0') {
-            pTmp = NULL;
-        }
-    }
-    *pArgs = pTmp;
-}
-
-/**
- * Breaks up a line into multiple arguments.
- *
- * @param io_pLine Line to be broken up.
- * @param o_pArgc Number of components found.
- * @param io_pargc Array of individual components
- * 
- * Note: Taken from: https://stackoverflow.com/questions/5534620/mimicking-the-shell-argument-parser-in-c
- */
-static void parseArguments(char *io_pLine, int *o_pArgc, char **o_pArgv) {
-    char *pNext = io_pLine;
-    size_t i;
-    int j;
-    int quoted = 0;
-    size_t len = strlen(io_pLine);
-
-    // Protect spaces inside quotes, but lose the quotes
-    for(i = 0; i < len; i++) {
-        if ((!quoted) && ('"' == io_pLine[i])) {
-            quoted = 1;
-            io_pLine[i] = ' ';
-        } else if ((quoted) && ('"' == io_pLine[i])) {
-            quoted = 0;
-            io_pLine[i] = ' ';
-        } else if ((quoted) && (' ' == io_pLine[i])) {
-            io_pLine[i] = '\1';
-        }
+    if( PyUnicode_Check(py_val) ) {  // python3 has unicode, but we convert to bytes
+        s = PyUnicode_AsUTF8String(py_val);
+    } else if( PyBytes_Check(py_val) ) {  // python2 has bytes already
+        s = PyObject_Bytes(py_val);
+    } else {
+        // Not a string => Error, warning ...
+        PyErr_SetString(PyExc_TypeError, "Not a string");
     }
 
-    // init
-    memset(o_pArgv, 0x00, sizeof(char*) * C_MAXARGS);
-    *o_pArgc = 1;
-    o_pArgv[0] = io_pLine;
-
-    while ((NULL != pNext) && (*o_pArgc < C_MAXARGS)) {
-        splitLine(pNext, &(o_pArgv[*o_pArgc]));
-        pNext = o_pArgv[*o_pArgc];
-
-        if (NULL != o_pArgv[*o_pArgc]) {
-            *o_pArgc += 1;
-        }
+    // If succesfully converted to bytes, then convert to C string
+    if (s) {
+        converted_string = PyBytes_AsString(s);
     }
-
-    for(j = 0; j < *o_pArgc; j++) {
-        len = strlen(o_pArgv[j]);
-        for(i = 0; i < len; i++) {
-            if('\1' == o_pArgv[j][i]) {
-                o_pArgv[j][i] = ' ';
-            }
-        }
-    }
+    return converted_string;
 }
 
 static PyObject *
@@ -105,28 +49,35 @@ system_call(PyObject *self, PyObject *args)
 static PyObject *
 py_main(PyObject *self, PyObject *args)
 {
-    int argc = 0;
-    char **argv = NULL;
-    const char *command;
-    char *cmd;
+    Py_ssize_t argc =  PyTuple_Size(args);
+    Py_ssize_t retval;
 
-    if (!PyArg_ParseTuple(args, "s", &command))
-    {
+    char **argv = (char **)calloc(sizeof(char*), (unsigned long)argc+1);
+    const char **argv_const = (const char**) argv;
+
+    if (argv == NULL) {
+        if(!PyErr_Occurred()) 
+            PyErr_SetString(PyExc_MemoryError, "Unable to allocate memory");
         return NULL;
     }
 
+    for (unsigned int i=0; i < argc; i++) {
+        //char *arg = NULL;
+        PyObject *item = PyTuple_GetItem(args, i);
+        if (!item) {
+            return NULL;
+        }
+        argv[i] = (char *)convertToCharArray(item);
+    }
+
     /* assign and parse string representing commands */
-    cmd = (char *)calloc(strlen(command)+1, sizeof(char));
-    strcpy(cmd, command);
-    parseArguments(cmd, &argc, argv);
+
+    retval = wgrib(argc, argv_const);
 
     /* clean up */
-    free(cmd);
-    for (int i=0; i < argc; i++) {
-        free(argv[i]);
-    }
     free(argv);
 
+    return PyLong_FromSsize_t(retval);
     Py_RETURN_NONE;
 }
 

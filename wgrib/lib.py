@@ -16,6 +16,8 @@ try:
 except ImportError:
     from contextlib2 import redirect_stdout, redirect_stderr
 
+from . import wgrib, wgrib2
+
 # Note: OutputGrabber class taken from: 
 # https://stackoverflow.com/questions/24277488/in-python-how-to-capture-the-stdout-from-a-c-shared-library-to-a-variable
 class OutputGrabber(object):
@@ -88,29 +90,40 @@ class OutputGrabber(object):
                 break
             self.capturedtext += char
 
-_dir = os.path.abspath(os.path.dirname(__file__))
+# _dir = os.path.abspath(os.path.dirname(__file__))
 
-if sys.platform.startswith('win'):
-    lib_prefix = ''
-    lib_ext = '.dll'
-else:
-    lib_prefix = 'lib'
-    lib_ext = '.so'
+# if sys.platform.startswith('win'):
+#     lib_prefix = ''
+#     lib_ext = '.dll'
+# else:
+#     lib_prefix = 'lib'
+#     lib_ext = '.so'
 
-_lib = ctypes.CDLL(os.path.join(_dir, lib_prefix + 'wgrib' + lib_ext))
-_main = _lib.wgrib_main
-_main.restype = ctypes.c_int
-_main.argtypes = [ctypes.c_int, ctypes.POINTER(ctypes.POINTER(ctypes.c_char))]
+# _lib = ctypes.CDLL(os.path.join(_dir, lib_prefix + 'wgrib' + lib_ext))
+# _main = _lib.wgrib_main
+# _main.restype = ctypes.c_int
+# _main.argtypes = [ctypes.c_int, ctypes.POINTER(ctypes.POINTER(ctypes.c_char))]
 
-def wgrib_main(args=sys.argv):
-    argc = len(args)
-    argv = ctypes.c_char_p * (argc+1)
+# def wgrib_main(args=sys.argv):
+#     argc = len(args)
+#     argv = ctypes.c_char_p * (argc+1)
     
-    with OutputGrabber(sys.stdout) as stdout:
-        _main(argc, argv(*[ctypes.c_char_p(arg.encode('utf-8')) for arg in args]))
-    return stdout.capturedtext
+#     with OutputGrabber(sys.stdout) as stdout:
+#         _main(argc, argv(*[ctypes.c_char_p(arg.encode('utf-8')) for arg in args]))
+#     return stdout.capturedtext
 
-def wgrib2_main(args=sys.argv):
-    raise NotImplementedError('TODO')
+# del lib_prefix, lib_ext, _lib, _main
+    
+def check_wgrib_output(args=sys.argv):
+    with OutputGrabber(sys.stdout) as stdout, \
+            OutputGrabber(sys.stderr) as stderr:
+        wgrib.main(args)
+    return stdout.capturedtext, stderr.capturedtext
 
-del lib_prefix, lib_ext, os, sys, ctypes, _lib, _main
+def check_wgrib2_output(args=sys.argv):
+    with OutputGrabber(sys.stdout) as stdout, \
+            OutputGrabber(sys.stderr) as stderr:
+        wgrib2.main(args)
+    return stdout.capturedtext, stderr.capturedtext
+
+del os, sys, ctypes
