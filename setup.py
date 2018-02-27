@@ -61,7 +61,7 @@ if not os.path.isdir(here + '/src/grib2'):
     if not os.path.exists(tarfilepath):
         print('Downloading wgrib2 source code...')
         request = urllib.request.urlopen(wgrib2_url)
-        with open(tarfilepath, 'rb') as tgz:
+        with open(tarfilepath, 'wb') as tgz:
             tgz.write(request.read())
     print('Extracting src/{}...'.format(os.path.basename(tarfilepath)))
     with tarfile.open(tarfilepath, mode='r:gz') as tgz:
