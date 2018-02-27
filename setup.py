@@ -64,13 +64,16 @@ define = b'''
 #endif
 
 '''
-BDS_unpack_mod = r'(\*\*\*\\n\", n\);\n)[\t ]+exit\(8\);\n[\t ]+for'
+BDS_unpack_mod = b'(\\*\\*\\*\\n\", n\\);\n)[\t ]+exit\\(8\\);\n[\t ]+for'
 if not os.path.exists(here + '/src/wgrib.c'):
     print('Downloading wgrib source code...')
     request = urllib.request.urlopen(wgrib_url)
     with open(here + '/src/wgrib.c', 'wb') as wgrib_src:
         src = BytesIO(request.read().replace(c_main, define + c_main.replace(b'main', b'GRIB_MAIN')))
-        src = re.sub(BDS_unpack_mod, b'\\1\treturn;\tfor', src.getvalue())
+        try:
+            src = re.sub(BDS_unpack_mod, b'\\1\treturn;\tfor', src.getvalue())
+        except:
+            src = re.sub(bytes(BDS_unpack_mod.encode('ascii')), b'\\1\treturn;\tfor', src.getvalue())
         src = src.replace(b'exit(', b'return(')
         
         wgrib_src.write(src)
@@ -112,7 +115,7 @@ if 'build_ext' in sys.argv:
         print('\nBuilding wgrib...')
         if not isWindows():
             # clunky hack to force position independent code on *nix systems
-            for var in ['CFLAGS', 'LDFLAGS']:
+            for var in ['CFLAGS', 'FFLAGS', 'LDFLAGS']:
                 flags = os.environ.get(var, '')
                 flags += ' -fPIC' if '-fPIC' not in flags else ''
                 os.environ[var] = flags  
@@ -153,7 +156,13 @@ if 'build_ext' in sys.argv:
                 if os.system('make') == 0:
                     os.system('make lib')
                     os.chdir('lib')
-                    grib2_archives = [ar for ar in os.listdir('.') if ar.endswith('.a')]
+                    if isLinux():
+                        grib2_objs = []
+                        for root, dirnames, filenames in os.walk('src/grib2'):
+                            for filename in fnmatch.filter(filenames, '*.o'):
+                                grib2_objs.append(os.path.join(root, filename))
+                    else:  # Darwin
+                        grib2_objs = [ar for ar in os.listdir('.') if ar.endswith('.a')]
                     grib2_ext = Extension('wgrib.wgrib2', 
                         define_macros=[('GRIB_MAIN', 'wgrib2'),
                                        ('CALLABLE_WGRIB2', 1)],
@@ -162,12 +171,12 @@ if 'build_ext' in sys.argv:
                                  'src/grib2/wgrib2/fnlist.c'],
                         include_dirs=['src/grib2/wgrib2', 'src/grib/include'],
                         library_dirs=['src/grib2/lib'], 
-                        libraries=[a.split('.a')[0].replace('lib', '') for a in grib2_archives] + ([
+                        libraries=[a.split('.a')[0].replace('lib', '') for a in grib2_objs] + ([
                             'gomp', 'gfortran'] if os.environ['FC'].startswith('gfortran') else [])
                         )
                     extensions += [grib2_ext]
 
-                    cc.link_shared_lib(grib2_archives, grib_exe.replace('grib', 'grib2'),
+                    cc.link_shared_lib(grib2_objs, grib_exe.replace('grib', 'grib2'),
                         libraries=[] if isWindows() else ['m'],
                         output_dir=fix_path(here + '/' + 'wgrib'),
                         extra_postargs=['/DLL', '/INCLUDE:wgrib2', 
