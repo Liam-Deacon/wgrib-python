@@ -9,6 +9,7 @@ import tarfile
 from codecs import open
 from os import path
 from tempfile import gettempdir
+import shutil
 
 from six.moves import urllib
 from io import BytesIO, StringIO
@@ -41,16 +42,16 @@ else:
 
 # add clean up
 if 'clean' in sys.argv:
-    for i in ['src/wgrib.c', 'src/pywgrib2', 'src/grib2', 'src/grib2.tgz'] + \
+    for i in ['src/wgrib.c', 'src/pywgrib2.c', 'src/grib2', 'src/wgrib2.tgz'] + \
                 list(glob.glob(scripts_dir + 'wgrib*')):
         p = here + '/' + i if not os.path.isabs(i) else i
         print('remove {}'.format(p))
         try:
             if os.path.isdir(p):
-                os.rmdir(p)
+                shutil.rmtree(p)
             else:
                 os.unlink(p)
-        except IOError:
+        except OSError:
             pass
 
 # get (and slightly modify) wgrib source
@@ -114,7 +115,8 @@ if 'build_ext' in sys.argv:
             for var in ['CFLAGS', 'LDFLAGS']:
                 flags = os.environ.get(var, '')
                 flags += ' -fPIC' if '-fPIC' not in flags else ''
-                os.environ[var] = flags   
+                os.environ[var] = flags  
+
         grib_objs = cc.compile(list(map(fix_path, grib_sources)), output_dir=gettempdir(), 
                                extra_postargs=['-fPIC'] if not isWindows() else [])
         cc.link_executable(grib_objs, grib_exe, 
@@ -129,16 +131,19 @@ if 'build_ext' in sys.argv:
                            extra_postargs=['/DLL', '/INCLUDE:wgrib', '/EXPORT:wgrib'] if isWindows() else ['-fPIC'])
         
         if not isWindows():  # wgrib2 currently only supports GNU toolchain
-            print('\nBuilding wgrib2...')
-            os.environ['CC'] = os.environ.get('CC', cc.compiler[0])
-            os.environ['FC'] = os.environ.get('FC', fc.command_vars.get('compiler_f90') or fc.command_vars.get('compiler_f77'))
-            
-            # modify files for wgrib2
-            with open('src/pywgrib.c', 'rb') as src, open('src/pywgrib2.c', 'wb') as dest:
-                code = src.read().replace(b'grib', b'grib2')
-                dest.write(code.replace(b'int wgrib2(int argc, char **argv);',
-                                        b'int wgrib2(int argc, const char **argv);'))
-            
+            try:
+                print('\nBuilding wgrib2...')
+                os.environ['CC'] = os.environ.get('CC', cc.compiler[0])
+                os.environ['FC'] = os.environ.get('FC', fc.command_vars.get('compiler_f90') or fc.command_vars.get('compiler_f77'))
+                
+                # modify files for wgrib2
+                with open('src/pywgrib.c', 'rb') as src, open('src/pywgrib2.c', 'wb') as dest:
+                    code = src.read().replace(b'grib', b'grib2')
+                    dest.write(code.replace(b'int wgrib2(int argc, char **argv);',
+                                            b'int wgrib2(int argc, const char **argv);'))
+            except LinkError as err:
+                print(err, file=sys.stderr)
+    
             try:
                 curdir = os.path.abspath('.')
                 os.chdir(here + '/src/grib2')
@@ -172,9 +177,9 @@ if 'build_ext' in sys.argv:
         
     except ImportError:
         print('Numpy is needed to compile wgrib executable', file=sys.stderr)
-    except LinkError:
+    except LinkError as err:
         # Seems to be an -fPIC issue
-        pass
+        print(err, file=sys.stderr)
 try:
     grib2_sources = glob.iglob('src/grib2/**/*', recursive=True)
 except TypeError:
@@ -277,6 +282,7 @@ setup(
         'requirements.txt': 'requirements.txt',
         'LICENSE.txt': 'LICENSE.txt',
         'VERSION': 'VERSION',
+        'wgrib': glob.glob(here + '/wgrib/wgrib*')
         path.join('src', 'grib2'): grib2_sources,
         path.join('scripts', 'wgrib'): path.join(here, 'scripts', grib_exe)
     },
