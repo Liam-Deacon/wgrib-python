@@ -7,7 +7,6 @@ import tarfile
 
 # To use a consistent encoding
 from codecs import open
-from glob import glob
 from os import path
 from tempfile import gettempdir
 
@@ -21,10 +20,8 @@ try:
 except ImportError:
     from setuptools import Extension
 
-try:
-    import glob2 as glob
-except ImportError:
-    import glob
+import glob
+import fnmatch
 
 here = path.abspath(path.dirname(__file__))
 
@@ -60,11 +57,17 @@ if not os.path.exists(here + '/src/wgrib.c'):
         wgrib_src.write(src)
 
 if not os.path.isdir(here + '/src/grib2'):
-    print('Downloading wgrib2 source code...')
-    request = urllib.request.urlopen(wgrib2_url)
-    wgrib2_tgz = BytesIO(request.read())
-    wgrib2_tgz.seek(0)
-    tar = tarfile.open(fileobj=wgrib2_tgz, mode='r:gz').extractall(path=here + '/src')
+    tarfilepath = os.path.join(here, 'src', os.path.basename(wgrib2_url))
+    if not os.path.exists(tarfilepath):
+        print('Downloading wgrib2 source code...')
+        request = urllib.request.urlopen(wgrib2_url)
+        with open(tarfilepath, 'rb') as tgz:
+            tgz.write(request.read())
+    print('Extracting src/{}...'.format(os.path.basename(tarfilepath)))
+    with tarfile.open(tarfilepath, mode='r:gz') as tgz:
+        for name in tgz.getnames():
+            print('extracting src/{}'.format(name))
+            tgz.extract(name, path=here + '/src')
 
 # build c extensions
 grib_ext = Extension('wgrib.wgrib', sources=['src/wgrib.c', 'src/pywgrib.c'],
@@ -148,6 +151,17 @@ if 'build_ext' in sys.argv:
         
     except ImportError:
         print('Numpy is needed to compile wgrib executable', file=sys.stderr)
+try:
+    grib2_sources = glob.iglob('src/grib2/**/*', recursive=True)
+except TypeError:
+    try:
+        import glob2
+        grib2_sources = glob2.iglob('src/grib2/**/*', recursive=True)
+    except (ImportError, TypeError):
+        grib2_sources = []
+        for root, dirnames, filenames in os.walk('src/grib2'):
+            for filename in fnmatch.filter(filenames, '*'):
+                grib2_sources.append(os.path.join(root, filename))
 
 # Get the long description from the README file
 with open(path.join(here, 'README.md'), encoding='utf-8') as f:
@@ -236,7 +250,10 @@ setup(
     # installed, specify them here.  If using Python 2.6 or less, then these
     # have to be included in MANIFEST.in as well.
     package_data={
-        path.join('src', 'grib2'): glob.iglob('src/**/*', recursive=True),
+        'requirements.txt': 'requirements.txt',
+        'LICENSE.txt': 'LICENSE.txt',
+        'VERSION': 'VERSION',
+        path.join('src', 'grib2'): grib2_sources,
         path.join('scripts', 'wgrib'): path.join(here, 'scripts', grib_exe)
     },
 
