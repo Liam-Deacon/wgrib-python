@@ -15,6 +15,7 @@ from io import BytesIO, StringIO
 
 # Always prefer setuptools over distutils
 from setuptools import find_packages, setup
+from distutils.errors import LinkError
 try:
     from numpy.distutils import Extension
 except ImportError:
@@ -29,6 +30,7 @@ here = path.abspath(path.dirname(__file__))
 scripts_dir = here + '/' + 'scripts/'
 
 isWindows = lambda: sys.platform.startswith('win')
+isLinux = lambda: sys.platform.startswith('linux')
 BITS = int(platform.architecture()[0].strip('bit'))
 
 # crude OS dependent path fixing
@@ -36,6 +38,20 @@ if isWindows():
     fix_path = lambda x: x.replace(here + '/', '')  #'"%s"' % x.replace('/', '\\')
 else:
     fix_path = lambda x: x.replace(' ', r'\ ')
+
+# add clean up
+if 'clean' in sys.argv:
+    for i in ['src/wgrib.c', 'src/pywgrib2', 'src/grib2', 'src/grib2.tgz'] + \
+                list(glob.glob(scripts_dir + 'wgrib*')):
+        p = here + '/' + i if not os.path.isabs(i) else i
+        print('remove {}'.format(p))
+        try:
+            if os.path.isdir(p):
+                os.rmdir(p)
+            else:
+                os.unlink(p)
+        except IOError:
+            pass
 
 # get (and slightly modify) wgrib source
 wgrib_url = 'ftp://ftp.cpc.ncep.noaa.gov/wd51we/wgrib/wgrib.c'
@@ -58,7 +74,7 @@ if not os.path.exists(here + '/src/wgrib.c'):
         
         wgrib_src.write(src)
 
-if not isWindows() and os.path.isdir(here + '/src/grib2'):
+if not isWindows() and not os.path.isdir(here + '/src/grib2'):
     tarfilepath = os.path.join(here, 'src', os.path.basename(wgrib2_url))
     if not os.path.exists(tarfilepath):
         print('Downloading wgrib2 source code...')
@@ -81,12 +97,6 @@ extensions = [grib_ext]
 # build native executables - have to get hands a little dirty
 grib_sources = [here + '/' +  'src/wgrib.c']
 grib_exe = 'wgrib'
-if 'clean' in sys.argv:
-    try:
-        print('remove {}'.format(repr(scripts_dir + grib_exe)))
-        os.unlink(scripts_dir + grib_exe)
-    except IOError:
-        pass
 
 if 'build_ext' in sys.argv:
     try:
@@ -98,8 +108,15 @@ if 'build_ext' in sys.argv:
         log.set_verbosity(1)  # show compilation commands
 
         # build sources
-        print('\nBuilding wgrib...')        
-        grib_objs = cc.compile(list(map(fix_path, grib_sources)), output_dir=gettempdir())
+        print('\nBuilding wgrib...')
+        if not isWindows():
+            # clunky hack to force position independent code on *nix systems
+            for var in ['CFLAGS', 'LDFLAGS']:
+                flags = os.environ.get(var, '')
+                flags += ' -fPIC' if '-fPIC' not in flags else ''
+                os.environ[var] = flags   
+        grib_objs = cc.compile(list(map(fix_path, grib_sources)), output_dir=gettempdir(), 
+                               extra_postargs=['-fPIC'] if not isWindows() else [])
         cc.link_executable(grib_objs, grib_exe, 
                            libraries=[] if isWindows() else ['m'],
                            output_dir=fix_path(here + '/' + 'scripts'))
@@ -109,7 +126,7 @@ if 'build_ext' in sys.argv:
         cc.link_shared_lib(libgrib_objs, grib_exe,
                            libraries=[] if isWindows() else ['m'],
                            output_dir=fix_path(here + '/' + 'wgrib'),
-                           extra_postargs=['/DLL', '/INCLUDE:wgrib', '/EXPORT:wgrib'] if isWindows() else [])
+                           extra_postargs=['/DLL', '/INCLUDE:wgrib', '/EXPORT:wgrib'] if isWindows() else ['-fPIC'])
         
         if not isWindows():  # wgrib2 currently only supports GNU toolchain
             print('\nBuilding wgrib2...')
@@ -129,11 +146,6 @@ if 'build_ext' in sys.argv:
                     os.system('make lib')
                     os.chdir('lib')
                     grib2_archives = [ar for ar in os.listdir('.') if ar.endswith('.a')]
-                    cc.link_shared_lib(grib2_archives, grib_exe.replace('grib', 'grib2'),
-                        libraries=[] if isWindows() else ['m'],
-                        output_dir=fix_path(here + '/' + 'wgrib'),
-                        extra_postargs=['/DLL', '/INCLUDE:wgrib2', 
-                                        '/EXPORT:wgrib2'] if isWindows() else [])
                     grib2_ext = Extension('wgrib.wgrib2', 
                         define_macros=[('GRIB_MAIN', 'wgrib2'),
                                        ('CALLABLE_WGRIB2', 1)],
@@ -146,6 +158,12 @@ if 'build_ext' in sys.argv:
                             'gomp', 'gfortran'] if os.environ['FC'].startswith('gfortran') else [])
                         )
                     extensions += [grib2_ext]
+
+                    cc.link_shared_lib(grib2_archives, grib_exe.replace('grib', 'grib2'),
+                        libraries=[] if isWindows() else ['m'],
+                        output_dir=fix_path(here + '/' + 'wgrib'),
+                        extra_postargs=['/DLL', '/INCLUDE:wgrib2', 
+                                        '/EXPORT:wgrib2'] if isWindows() else ['-fPIC'])
                 else:
                     print('\nFailed to make wgrib2', file=sys.stderr)
             finally:
@@ -154,6 +172,9 @@ if 'build_ext' in sys.argv:
         
     except ImportError:
         print('Numpy is needed to compile wgrib executable', file=sys.stderr)
+    except LinkError:
+        # Seems to be an -fPIC issue
+        pass
 try:
     grib2_sources = glob.iglob('src/grib2/**/*', recursive=True)
 except TypeError:
