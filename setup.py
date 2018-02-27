@@ -282,7 +282,7 @@ setup(
         'requirements.txt': 'requirements.txt',
         'LICENSE.txt': 'LICENSE.txt',
         'VERSION': 'VERSION',
-        'wgrib': glob.glob(here + '/wgrib/wgrib*')
+        'wgrib': glob.glob(here + '/wgrib/wgrib*'),
         path.join('src', 'grib2'): grib2_sources,
         path.join('scripts', 'wgrib'): path.join(here, 'scripts', grib_exe)
     },
