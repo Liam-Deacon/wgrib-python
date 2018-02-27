@@ -22,12 +22,14 @@ except ImportError:
 
 import glob
 import fnmatch
+import platform
 
 here = path.abspath(path.dirname(__file__))
 
 scripts_dir = here + '/' + 'scripts/'
 
 isWindows = lambda: sys.platform.startswith('win')
+BITS = int(platform.architecture()[0].strip('bit'))
 
 # crude OS dependent path fixing
 if isWindows():
@@ -56,7 +58,7 @@ if not os.path.exists(here + '/src/wgrib.c'):
         
         wgrib_src.write(src)
 
-if not os.path.isdir(here + '/src/grib2'):
+if not isWindows() and os.path.isdir(here + '/src/grib2'):
     tarfilepath = os.path.join(here, 'src', os.path.basename(wgrib2_url))
     if not os.path.exists(tarfilepath):
         print('Downloading wgrib2 source code...')
@@ -71,7 +73,8 @@ if not os.path.isdir(here + '/src/grib2'):
 
 # build c extensions
 grib_ext = Extension('wgrib.wgrib', sources=['src/wgrib.c', 'src/pywgrib.c'],
-                     define_macros=[('GRIB_MAIN', 'wgrib')], 
+                     define_macros=[('GRIB_MAIN', 'wgrib')] + 
+                                    (['MS_WIN64'] if isWindows() and BITS == 64 else []), 
                      libraries=[] if isWindows() else ['m'])
 extensions = [grib_ext]
 

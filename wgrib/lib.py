@@ -16,7 +16,12 @@ try:
 except ImportError:
     from contextlib2 import redirect_stdout, redirect_stderr
 
-from . import wgrib, wgrib2
+from . import wgrib
+try:
+    from . import wgrib2
+    WGRIB2_SUPPORT = True
+except ImportError:
+    WGRIB2_SUPPORT = False
 
 # Note: OutputGrabber class taken from: 
 # https://stackoverflow.com/questions/24277488/in-python-how-to-capture-the-stdout-from-a-c-shared-library-to-a-variable
@@ -121,6 +126,8 @@ def check_wgrib_output(args=sys.argv):
     return stdout.capturedtext, stderr.capturedtext
 
 def check_wgrib2_output(args=sys.argv):
+    if not WGRIB2_SUPPORT:
+        raise RuntimeError('wgrib2 wrapper not supported')  # i.e. on Windows
     with OutputGrabber(sys.stdout) as stdout, \
             OutputGrabber(sys.stderr) as stderr:
         wgrib2.main(args)
