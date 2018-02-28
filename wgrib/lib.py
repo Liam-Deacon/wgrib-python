@@ -11,6 +11,8 @@ import sys
 import threading
 import time
 
+from functools import wraps
+
 try:
     from contextlib import redirect_stdout, redirect_stderr
 except ImportError:
@@ -32,10 +34,9 @@ class OutputGrabber(object):
     escape_char = "\b"
 
     def __init__(self, stream=None, threaded=False):
-        self.origstream = stream
+        self.sleep = time.sleep
+        self.origstream = stream or sys.stdout
         self.threaded = threaded
-        if self.origstream is None:
-            self.origstream = sys.stdout
         self.origstreamfd = self.origstream.fileno()
         self.capturedtext = ""
         # Create a pipe so the stream can be captured:
@@ -62,7 +63,7 @@ class OutputGrabber(object):
             self.workerThread = threading.Thread(target=self.readOutput)
             self.workerThread.start()
             # Make sure that the thread is running and os.read() has executed:
-            time.sleep(0.01)
+            time.sleep(0.5)
 
     def stop(self):
         """
@@ -93,7 +94,7 @@ class OutputGrabber(object):
             char = os.read(self.pipe_out, 1)
             if not char or self.escape_char in char:
                 break
-            self.capturedtext += char
+            self.capturedtext += str(char)
 
 # _dir = os.path.abspath(os.path.dirname(__file__))
 
@@ -118,19 +119,24 @@ class OutputGrabber(object):
 #     return stdout.capturedtext
 
 # del lib_prefix, lib_ext, _lib, _main
-    
-def check_wgrib_output(args=sys.argv):
-    with OutputGrabber(sys.stdout) as stdout, \
-            OutputGrabber(sys.stderr) as stderr:
-        wgrib.main(args)
-    return stdout.capturedtext, stderr.capturedtext
 
-def check_wgrib2_output(args=sys.argv):
-    if not WGRIB2_SUPPORT:
-        raise RuntimeError('wgrib2 wrapper not supported')  # i.e. on Windows
-    with OutputGrabber(sys.stdout) as stdout, \
-            OutputGrabber(sys.stderr) as stderr:
-        wgrib2.main(args)
-    return stdout.capturedtext, stderr.capturedtext
+def grab_output(func, out_stream=sys.stdout, err_stream=sys.stderr):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        with OutputGrabber(out_stream) as stdout, \
+            OutputGrabber(err_stream) as stderr:
+            func(*args, **kwargs)
+        try:
+            out, err = stdout.capturedtext, stderr.capturedtext
+            time.sleep(0.5)
+        except TypeError:
+            pass
+        return out, err
+    return wrapper
+        
 
-del os, sys, ctypes
+@grab_output
+def check_wgrib_output(args=sys.argv, wgrib_version=2):
+    if wgrib_version == 2 and WGRIB2_SUPPORT:
+        return wgrib2(args)
+    return wgrib.main(args)  # default fallback
