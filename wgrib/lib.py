@@ -47,7 +47,7 @@ class WGribSharedLib(object):
             _wgrib = 'wgrib{}'.format('2' if version == 2 else '')
             _libname = os.path.join(_dir, lib_prefix + _wgrib + lib_suffix + lib_ext)
             if not os.path.exists(_libname):
-                _libname = glob(os.path.join(_dir, lib_prefix + _wgrib + '*' + lib_ext))[0]
+                _libname = glob(os.path.join(_dir, '*' + _wgrib + '*' + lib_ext))[0]
 
             _lib = ctypes.CDLL(_libname)
             _main = _lib.wgrib
