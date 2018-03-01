@@ -9,6 +9,7 @@ import shutil
 import glob
 import fnmatch
 import platform
+import subprocess
 
 # To use a consistent encoding
 from codecs import open
@@ -66,7 +67,7 @@ define = b'''
 #endif
 
 '''
-BDS_unpack_mod = b'(\\*\\*\\*\\n\", n\\);\n)[\t ]+exit\\(8\\);\n[\t ]+for'
+BDS_unpack_mod = bytes(r'(\*\*\*\\n\", n\);\n)[\t ]+exit\(8\);\n[\t ]+for')
 if 'build_ext' in sys.argv and not os.path.exists(here + '/src/wgrib.c'):
     print('Downloading wgrib source code...')
     request = urllib.request.urlopen(wgrib_url)
@@ -117,7 +118,7 @@ if 'build_ext' in sys.argv:
         if not isWindows():
             # clunky hack to force position independent code on *nix systems
             for var in ['CFLAGS', 'FFLAGS', 'LDFLAGS']:
-                flags = os.environ.get(var, '')
+                flags = os.environ.get(var, '-fPIC')
                 flags += ' -fPIC' if '-fPIC' not in flags else ''
                 os.environ[var] = flags  
 
@@ -140,23 +141,38 @@ if 'build_ext' in sys.argv:
         if not isWindows():  # wgrib2 currently only supports GNU toolchain
             try:
                 print('\nBuilding wgrib2...')
-                os.environ['CC'] = os.environ.get('CC', cc.compiler[0])
-                os.environ['FC'] = os.environ.get('FC', fc.command_vars.get('compiler_f90') or fc.command_vars.get('compiler_f77'))
                 fc = fcompiler.new_fcompiler()
+                env = os.environ.copy()
+                env['CC'] = env.get('CC', cc.compiler[0])
+                env['FC'] = env.get('FC', fc.command_vars.get('compiler_f90') or fc.command_vars.get('compiler_f77'))
 
                 # modify files for wgrib2
                 with open('src/pywgrib.c', 'rb') as src, open('src/pywgrib2.c', 'wb') as dest:
                     code = src.read().replace(b'grib', b'grib2')
                     dest.write(code.replace(b'int wgrib2(int argc, char **argv);',
                                             b'int wgrib2(int argc, const char **argv);'))
+                
+                # workaround as environment is not exported correctly to subprocess.call
+                env['wFFLAGS'] = env['FFLAGS']
+                if not path.exists('src/grib2/makefile.orig'):
+                    shutil.copy2('src/grib2/makefile', 'src/grib2/makefile.orig')
+                with open('src/grib2/makefile.orig', 'rb') as orig_makefile, \
+                        open('src/grib2/makefile', 'wb') as makefile:
+                    code = orig_makefile.read()
+                    code = code.replace(b'#export CC=gcc', b'export CC={}'.format(env['CC']), 1)
+                    code = code.replace(b'#export FC=gfortran', 
+                                        b'export FC={}\nexport wFFLAGS={}'.format(env['FC'], env['wFFLAGS']), 1)
+                    code = code.replace(b'wFFLAGS:=""\n', b'#wFFLAGS:=""')
+                    makefile.write(code)
+
             except LinkError as err:
                 print(err, file=sys.stderr)
     
             try:
                 curdir = os.path.abspath('.')
                 os.chdir(here + '/src/grib2')
-                if os.system('make') == 0:
-                    os.system('make lib')
+                if subprocess.call(['make'], env=env, shell=True) == 0:
+                    subprocess.call(['make lib'], env=env, shell=True)
                     os.chdir('lib')
                     if isLinux():
                         grib2_objs = []
@@ -174,7 +190,7 @@ if 'build_ext' in sys.argv:
                         include_dirs=['src/grib2/wgrib2', 'src/grib/include'],
                         library_dirs=['src/grib2/lib'], 
                         libraries=[a.split('.a')[0].replace('lib', '') for a in grib2_objs] + ([
-                            'gomp', 'gfortran'] if os.environ['FC'].startswith('gfortran') else [])
+                            'gomp', 'gfortran'] if 'gfortran' in env['FC'] else [])
                         )
                     extensions += [grib2_ext]
 
