@@ -35,6 +35,7 @@ scripts_dir = path.join(here, 'scripts')
 
 isWindows = lambda: sys.platform.startswith('win')
 isLinux = lambda: sys.platform.startswith('linux')
+toAscii = lambda x: x if isinstance(x, bytes) else bytes(x.encode('ascii'))
 BITS = int(platform.architecture()[0].strip('bit'))
 
 # crude OS dependent path fixing
@@ -159,9 +160,9 @@ if 'build_ext' in sys.argv:
                 with open('src/grib2/makefile.orig', 'rb') as orig_makefile, \
                         open('src/grib2/makefile', 'wb') as makefile:
                     code = orig_makefile.read()
-                    code = code.replace(b'#export CC=gcc', b'export CC={}'.format(env['CC']), 1)
+                    code = code.replace(b'#export CC=gcc', b'export CC=' + toAscii(env['CC']), 1)
                     code = code.replace(b'#export FC=gfortran', 
-                                        b'export FC={}\nexport wFFLAGS={}'.format(env['FC'], env['wFFLAGS']), 1)
+                                        b'export FC=%s\nexport wFFLAGS=%s' % (toAscii(env['FC']), toAscii(env['wFFLAGS'])), 1)
                     code = code.replace(b'wFFLAGS:=""\n', b'#wFFLAGS:=""')
                     makefile.write(code)
 
