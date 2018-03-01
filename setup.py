@@ -155,6 +155,7 @@ if 'build_ext' in sys.argv:
                 
                 # workaround as environment is not exported correctly to subprocess.call
                 env['wFFLAGS'] = env['FFLAGS']
+                env['wCPPFLAGS'] = '-DGFORTRAN' if 'gfortran' in env['FC'] else ''
                 if not path.exists('src/grib2/makefile.orig'):
                     shutil.copy2('src/grib2/makefile', 'src/grib2/makefile.orig')
                 with open('src/grib2/makefile.orig', 'rb') as orig_makefile, \
@@ -163,7 +164,7 @@ if 'build_ext' in sys.argv:
                     code = code.replace(b'#export CC=gcc', b'export CC=' + toAscii(env['CC']), 1)
                     code = code.replace(b'#export FC=gfortran', 
                                         b'export FC=%s\nexport wFFLAGS=%s' % (toAscii(env['FC']), toAscii(env['wFFLAGS'])), 1)
-                    code = code.replace(b'wFFLAGS:=""\n', b'#wFFLAGS:=""')
+                    code = code.replace(b'wFFLAGS:=""\n', b'USE_IPOLATES=1\n#wFFLAGS:=""')
                     makefile.write(code)
 
             except LinkError as err:
@@ -175,13 +176,13 @@ if 'build_ext' in sys.argv:
                 if subprocess.call(['make'], env=env, shell=True) == 0:
                     subprocess.call(['make lib'], env=env, shell=True)
                     os.chdir('lib')
-                    if isLinux():
-                        grib2_objs = []
-                        for root, dirnames, filenames in os.walk('src/grib2'):
-                            for filename in fnmatch.filter(filenames, '*.o'):
-                                grib2_objs.append(os.path.join(root, filename))
-                    else:  # Darwin
-                        grib2_objs = [ar for ar in os.listdir('.') if ar.endswith('.a')]
+                    #if isLinux():
+                    grib2_objs = []
+                    for root, dirnames, filenames in os.walk('src/grib2'):
+                        for filename in fnmatch.filter(filenames, '*.o'):
+                            grib2_objs.append(os.path.join(root, filename))
+                    #else:  # Darwin
+                    #    grib2_objs = [ar for ar in os.listdir('.') if ar.endswith('.a')]
                     grib2_ext = Extension('wgrib.wgrib2', 
                         define_macros=[('GRIB_MAIN', 'wgrib2'),
                                        ('CALLABLE_WGRIB2', 1)],
