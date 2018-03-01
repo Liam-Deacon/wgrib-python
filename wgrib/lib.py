@@ -18,11 +18,7 @@ try:
 except ImportError:
     from contextlib2 import redirect_stdout, redirect_stderr
 
-try:
-    from . import wgrib
-except ImportError:
-    # fallback to using native lib
-    class wgrib(object):
+class WGribSharedLib(object):
         '''Mocks wgrib C extension using ctypes'''
         @staticmethod
         def wgrib(args=sys.argv):
@@ -36,19 +32,30 @@ except ImportError:
                 lib_prefix = 'lib'
                 lib_ext = '.so'
 
+            LP_c_char = ctypes.POINTER(ctypes.c_char)
+            LP_LP_c_char = ctypes.POINTER(LP_c_char)
+
             _lib = ctypes.CDLL(os.path.join(_dir, lib_prefix + 'wgrib' + lib_ext))
             _main = _lib.wgrib
             _main.restype = ctypes.c_int
-            _main.argtypes = [ctypes.c_int, ctypes.POINTER(ctypes.POINTER(ctypes.c_char))]
+            _main.argtypes = [ctypes.c_int,  LP_LP_c_char]
 
             argc = len(args)
-            argv = ctypes.c_char_p * (argc+1)
+            argv = (LP_c_char * (argc + 1))()
+            for i, arg in enumerate(args):
+                argv[i] = ctypes.create_string_buffer(arg.encode('utf-8'))
             
-            return _main(argc, argv(*[ctypes.c_char_p(arg.encode('utf-8')) for arg in args]))
+            return _main(argc, argv)
 
 
 try:
-    from . import wgrib2
+    from .wgrib import main as wgrib
+except ImportError:
+    # fallback to using native lib
+    wgrib = WGribSharedLib.wgrib
+
+try:
+    from .wgrib2 import main as wgrib2
     WGRIB2_SUPPORT = True
 except ImportError:
     WGRIB2_SUPPORT = False
@@ -140,8 +147,8 @@ def grab_output(func, out_stream=sys.stdout, err_stream=sys.stderr):
     return wrapper
         
 @grab_output
-def check_wgrib_output(args=sys.argv, wgrib_version=2):
+def check_wgrib_output(args=sys.argv, wgrib=wgrib):
     '''Returns tuple of (stdout, stderr) from wgrib CLI call'''
-    if wgrib_version == 2 and WGRIB2_SUPPORT:
-        return wgrib2.main(args)
-    return wgrib.main(args)  # default fallback
+    if (wgrib == 2 or wgrib == 'wgrib2') and WGRIB2_SUPPORT:
+        return wgrib2(args)
+    return wgrib(args)  # default fallback
