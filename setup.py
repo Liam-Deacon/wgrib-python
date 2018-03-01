@@ -1,15 +1,19 @@
+#! /usr/bin/python
 from __future__ import print_function
 
 import re
 import os
 import sys
 import tarfile
+import shutil
+import glob
+import fnmatch
+import platform
 
 # To use a consistent encoding
 from codecs import open
 from os import path
 from tempfile import gettempdir
-import shutil
 
 from six.moves import urllib
 from io import BytesIO, StringIO
@@ -20,14 +24,17 @@ from distutils.errors import LinkError
 try:
     from numpy.distutils import Extension
 except ImportError:
-    from setuptools import Extension
+    try:
+        from setuptools import Extension
+    except ImportError:
+        from distutils import Extension
 
-import glob
-import fnmatch
-import platform
+# default is to build and install
+if len(sys.argv) < 2:
+    sys.argv += ['build_ext', 'build', 'install']
 
+# define some useful variables and functions
 here = path.abspath(path.dirname(__file__))
-
 scripts_dir = here + '/' + 'scripts/'
 
 isWindows = lambda: sys.platform.startswith('win')
@@ -65,7 +72,7 @@ define = b'''
 
 '''
 BDS_unpack_mod = b'(\\*\\*\\*\\n\", n\\);\n)[\t ]+exit\\(8\\);\n[\t ]+for'
-if not os.path.exists(here + '/src/wgrib.c'):
+if 'build_ext' in sys.argv and not os.path.exists(here + '/src/wgrib.c'):
     print('Downloading wgrib source code...')
     request = urllib.request.urlopen(wgrib_url)
     with open(here + '/src/wgrib.c', 'wb') as wgrib_src:
@@ -78,7 +85,7 @@ if not os.path.exists(here + '/src/wgrib.c'):
         
         wgrib_src.write(src)
 
-if not isWindows() and not os.path.isdir(here + '/src/grib2'):
+if 'build_ext' in sys.argv and not isWindows() and not os.path.isdir(here + '/src/grib2'):
     tarfilepath = os.path.join(here, 'src', os.path.basename(wgrib2_url))
     if not os.path.exists(tarfilepath):
         print('Downloading wgrib2 source code...')
@@ -108,7 +115,6 @@ if 'build_ext' in sys.argv:
 
         # get compilers
         cc = ccompiler.new_compiler()
-        fc = fcompiler.new_fcompiler()
         log.set_verbosity(1)  # show compilation commands
 
         # build sources
@@ -141,7 +147,8 @@ if 'build_ext' in sys.argv:
                 print('\nBuilding wgrib2...')
                 os.environ['CC'] = os.environ.get('CC', cc.compiler[0])
                 os.environ['FC'] = os.environ.get('FC', fc.command_vars.get('compiler_f90') or fc.command_vars.get('compiler_f77'))
-                
+                fc = fcompiler.new_fcompiler()
+
                 # modify files for wgrib2
                 with open('src/pywgrib.c', 'rb') as src, open('src/pywgrib2.c', 'wb') as dest:
                     code = src.read().replace(b'grib', b'grib2')
