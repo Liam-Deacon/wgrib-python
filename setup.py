@@ -20,14 +20,9 @@ from io import BytesIO, StringIO
 
 # Always prefer setuptools over distutils
 from setuptools import find_packages, setup
-from distutils.errors import LinkError
-try:
-    from numpy.distutils import Extension
-except ImportError:
-    try:
-        from setuptools import Extension
-    except ImportError:
-        from distutils import Extension
+from distutils.errors import LinkError, CompileError
+from numpy.distutils.core import Extension
+
 
 # default is to build and install
 if len(sys.argv) < 2:
@@ -35,7 +30,7 @@ if len(sys.argv) < 2:
 
 # define some useful variables and functions
 here = path.abspath(path.dirname(__file__))
-scripts_dir = here + '/' + 'scripts/'
+scripts_dir = path.join(here, 'scripts')
 
 isWindows = lambda: sys.platform.startswith('win')
 isLinux = lambda: sys.platform.startswith('linux')
@@ -50,7 +45,7 @@ else:
 # add clean up
 if 'clean' in sys.argv:
     for i in ['src/wgrib.c', 'src/pywgrib2.c', 'src/grib2', 'src/wgrib2.tgz'] + \
-                list(glob.glob(scripts_dir + 'wgrib*')):
+                list(glob.glob(path.join(scripts_dir, 'wgrib*'))):
         p = here + '/' + i if not os.path.isabs(i) else i
         print('remove {}'.format(p))
         try:
@@ -99,14 +94,14 @@ if 'build_ext' in sys.argv and not isWindows() and not os.path.isdir(here + '/sr
             tgz.extract(name, path=here + '/src')
 
 # build c extensions
-grib_ext = Extension('wgrib.wgrib', sources=['src/wgrib.c', 'src/pywgrib.c'],
+grib_ext = Extension('wgrib.wgrib', sources=[path.join('src', 'wgrib.c'), path.join('src', 'pywgrib.c')],
                      define_macros=[('GRIB_MAIN', 'wgrib')] + 
-                                    (['MS_WIN64'] if isWindows() and BITS == 64 else []), 
+                                    ([('MS_WIN64', 1)] if isWindows() and BITS == 64 else []), 
                      libraries=[] if isWindows() else ['m'])
 extensions = [grib_ext]
 
 # build native executables - have to get hands a little dirty
-grib_sources = [here + '/' +  'src/wgrib.c']
+grib_sources = [path.join(here, *x) for x in [('src', 'wgrib.c'),]]
 grib_exe = 'wgrib'
 
 if 'build_ext' in sys.argv:
@@ -130,13 +125,13 @@ if 'build_ext' in sys.argv:
             grib_objs = cc.compile(list(map(fix_path, grib_sources)), output_dir=gettempdir())
             cc.link_executable(grib_objs, grib_exe, 
                             libraries=[] if isWindows() else ['m'],
-                            output_dir=fix_path(here + '/' + 'scripts'))
+                            output_dir=fix_path(path.join(here, 'scripts')))
             libgrib_objs = cc.compile(list(map(fix_path, grib_sources)), 
                                     macros=[('GRIB_MAIN', 'wgrib')], 
                                     output_dir=gettempdir())
             cc.link_shared_lib(libgrib_objs, grib_exe,
                             libraries=[] if isWindows() else ['m'],
-                            output_dir=fix_path(here + '/' + 'wgrib'),
+                            output_dir=fix_path(path.join(here, 'wgrib')),
                             extra_postargs=['/DLL', '/INCLUDE:wgrib', '/EXPORT:wgrib'] if isWindows() else ['-fPIC'])
         except LinkError as err:
             print(err, file=sys.stderr)
@@ -302,7 +297,7 @@ setup(
         'requirements.txt': 'requirements.txt',
         'LICENSE.txt': 'LICENSE.txt',
         'VERSION': 'VERSION',
-        'wgrib': glob.glob(here + '/wgrib/wgrib*'),
+        'wgrib': glob.glob(path.join(here, 'wgrib', 'wgrib*')),
         path.join('src', 'grib2'): grib2_sources,
         path.join('scripts', 'wgrib'): path.join(here, 'scripts', grib_exe)
     },

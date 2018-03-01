@@ -87,6 +87,68 @@ static PyMethodDef Methods[] = {
     {NULL, NULL, 0, NULL}
 };
 
+/*
 PyMODINIT_FUNC initwgrib(void) {
     (void) Py_InitModule("wgrib", Methods);
+}
+*/
+
+struct module_state {
+    PyObject *error;
+};
+
+#if PY_MAJOR_VERSION >= 3
+#define GETSTATE(m) ((struct module_state*)PyModule_GetState(m))
+#else
+#define GETSTATE(m) (&_state)
+static struct module_state _state;
+#endif
+
+
+#if PY_MAJOR_VERSION >= 3
+
+
+static struct PyModuleDef moduledef = {
+        PyModuleDef_HEAD_INIT,
+        "wgrib",
+        NULL,
+        sizeof(struct module_state),
+        Methods,
+        NULL,
+        NULL,
+        NULL,
+        NULL
+};
+
+#define INITERROR return NULL
+
+PyMODINIT_FUNC
+PyInit_wgrib(void)
+
+#else
+#define INITERROR return
+
+void
+initwgrib(void)
+#endif
+{
+#if PY_MAJOR_VERSION >= 3
+    PyObject *module = PyModule_Create(&moduledef);
+#else
+    PyObject *module = Py_InitModule("wgrib", Methods);
+#endif
+
+    if (module == NULL)
+        INITERROR;
+    struct module_state *st = GETSTATE(module);
+
+    st->error = PyErr_NewException("wgrib.RuntimeError", NULL, NULL);
+    if (st->error == NULL) {
+        Py_DECREF(module);
+        INITERROR;
+    }
+
+#if PY_MAJOR_VERSION >= 3
+    return module;
+#endif
 }
