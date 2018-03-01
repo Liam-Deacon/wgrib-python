@@ -10,7 +10,9 @@ import os
 import sys
 import threading
 import time
+import sys
 
+from glob import glob
 from functools import wraps
 
 try:
@@ -21,21 +23,33 @@ except ImportError:
 class WGribSharedLib(object):
         '''Mocks wgrib C extension using ctypes'''
         @staticmethod
-        def wgrib(args=sys.argv):
+        def wgrib(args=sys.argv, version=None):
             '''Use shared library/DLL to call wgrib'''
             _dir = os.path.abspath(os.path.dirname(__file__))
 
             if sys.platform.startswith('win'):
                 lib_prefix = ''
+                lib_suffix = ''
                 lib_ext = '.dll'
             else:
                 lib_prefix = 'lib'
+                try:
+                    s = sys.implementation
+                    lib_suffix = '.{}m-{}'.format(s.cachetag, s._multiarch)
+                except AttributeError:
+                    lib_suffix = ''
+
                 lib_ext = '.so'
 
             LP_c_char = ctypes.POINTER(ctypes.c_char)
             LP_LP_c_char = ctypes.POINTER(LP_c_char)
 
-            _lib = ctypes.CDLL(os.path.join(_dir, lib_prefix + 'wgrib' + lib_ext))
+            _wgrib = 'wgrib{}'.format('2' if version == 2 else '')
+            _libname = os.path.join(_dir, lib_prefix + _wgrib + lib_suffix + lib_ext)
+            if not os.path.exists(_libname):
+                _libname = glob(os.path.join(_dir, lib_prefix + _wgrib + '*' + lib_ext))[0]
+
+            _lib = ctypes.CDLL(_libname)
             _main = _lib.wgrib
             _main.restype = ctypes.c_int
             _main.argtypes = [ctypes.c_int,  LP_LP_c_char]
