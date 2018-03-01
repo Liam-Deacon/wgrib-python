@@ -161,7 +161,7 @@ def grab_output(func, out_stream=sys.stdout, err_stream=sys.stderr):
     return wrapper
         
 @grab_output
-def check_wgrib_output(args=sys.argv, wgrib=wgrib):
+def check_wgrib_output(args=sys.argv, wgrib=WGribSharedLib.wgrib):
     '''Returns tuple of (stdout, stderr) from wgrib CLI call'''
     if (wgrib == 2 or wgrib == 'wgrib2') and WGRIB2_SUPPORT:
         return wgrib2(args)
