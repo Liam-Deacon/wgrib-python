@@ -32,15 +32,20 @@ class WGribSharedLib(object):
                 lib_prefix = 'lib'
                 lib_ext = '.so'
 
+            LP_c_char = ctypes.POINTER(ctypes.c_char)
+            LP_LP_c_char = ctypes.POINTER(LP_c_char)
+
             _lib = ctypes.CDLL(os.path.join(_dir, lib_prefix + 'wgrib' + lib_ext))
             _main = _lib.wgrib
             _main.restype = ctypes.c_int
-            _main.argtypes = [ctypes.c_int, ctypes.POINTER(ctypes.POINTER(ctypes.c_char))]
+            _main.argtypes = [ctypes.c_int,  LP_LP_c_char]
 
             argc = len(args)
-            argv = ctypes.c_char_p * (argc+1)
+            argv = (LP_c_char * (argc + 1))()
+            for i, arg in enumerate(args):
+                argv[i] = ctypes.create_string_buffer(arg.encode('utf-8'))
             
-            return _main(argc, argv(*[ctypes.c_char_p(arg.encode('utf-8')) for arg in args]))
+            return _main(argc, argv)
 
 
 try:
