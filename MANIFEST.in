@@ -3,3 +3,4 @@ include VERSION
 include requirements.txt
 include LICENSE.txt
 include wgrib/wgrib*
+include wgrib/libwgrib*

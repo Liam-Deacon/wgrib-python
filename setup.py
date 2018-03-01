@@ -164,7 +164,8 @@ if 'build_ext' in sys.argv:
                     code = code.replace(b'#export CC=gcc', b'export CC=' + toAscii(env['CC']), 1)
                     code = code.replace(b'#export FC=gfortran', 
                                         b'export FC=%s\nexport wFFLAGS=%s' % (toAscii(env['FC']), toAscii(env['wFFLAGS'])), 1)
-                    code = code.replace(b'wFFLAGS:=""\n', b'USE_IPOLATES=1\n#wFFLAGS:=""')
+                    code = code.replace(b'wFFLAGS:=""\n', b'#wFFLAGS:=""')
+                    code = code.replace(b'USE_IPOLATES=1', b'USE_IPOLATES=0')
                     makefile.write(code)
 
             except LinkError as err:
