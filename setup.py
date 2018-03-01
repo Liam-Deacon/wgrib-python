@@ -67,7 +67,7 @@ define = b'''
 #endif
 
 '''
-BDS_unpack_mod = bytes(r'(\*\*\*\\n\", n\);\n)[\t ]+exit\(8\);\n[\t ]+for')
+BDS_unpack_mod = bytes(r'(\*\*\*\\n\", n\);\n)[\t ]+exit\(8\);\n[\t ]+for'.encode('ascii'))
 if 'build_ext' in sys.argv and not os.path.exists(here + '/src/wgrib.c'):
     print('Downloading wgrib source code...')
     request = urllib.request.urlopen(wgrib_url)
