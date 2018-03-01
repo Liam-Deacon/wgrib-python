@@ -18,11 +18,7 @@ try:
 except ImportError:
     from contextlib2 import redirect_stdout, redirect_stderr
 
-try:
-    from . import wgrib
-except ImportError:
-    # fallback to using native lib
-    class wgrib(object):
+class WGribSharedLib(object):
         '''Mocks wgrib C extension using ctypes'''
         @staticmethod
         def wgrib(args=sys.argv):
@@ -48,7 +44,13 @@ except ImportError:
 
 
 try:
-    from . import wgrib2
+    from .wgrib import main as wgrib
+except ImportError:
+    # fallback to using native lib
+    wgrib = WGribSharedLib.wgrib
+
+try:
+    from .wgrib2 import main as wgrib2
     WGRIB2_SUPPORT = True
 except ImportError:
     WGRIB2_SUPPORT = False
@@ -140,8 +142,8 @@ def grab_output(func, out_stream=sys.stdout, err_stream=sys.stderr):
     return wrapper
         
 @grab_output
-def check_wgrib_output(args=sys.argv, wgrib_version=2):
+def check_wgrib_output(args=sys.argv, wgrib=wgrib):
     '''Returns tuple of (stdout, stderr) from wgrib CLI call'''
-    if wgrib_version == 2 and WGRIB2_SUPPORT:
-        return wgrib2.main(args)
-    return wgrib.main(args)  # default fallback
+    if (wgrib == 2 or wgrib == 'wgrib2') and WGRIB2_SUPPORT:
+        return wgrib2(args)
+    return wgrib(args)  # default fallback
