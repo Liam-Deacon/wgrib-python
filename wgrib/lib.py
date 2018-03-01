@@ -18,7 +18,32 @@ try:
 except ImportError:
     from contextlib2 import redirect_stdout, redirect_stderr
 
-from . import wgrib
+try:
+    from . import wgrib
+except ImportError:
+    # fallback to using native lib
+    def wgrib(args=sys.argv):
+        '''Use shared library/DLL to call wgrib'''
+        _dir = os.path.abspath(os.path.dirname(__file__))
+
+        if sys.platform.startswith('win'):
+            lib_prefix = ''
+            lib_ext = '.dll'
+        else:
+            lib_prefix = 'lib'
+            lib_ext = '.so'
+
+        _lib = ctypes.CDLL(os.path.join(_dir, lib_prefix + 'wgrib' + lib_ext))
+        _main = _lib.wgrib
+        _main.restype = ctypes.c_int
+        _main.argtypes = [ctypes.c_int, ctypes.POINTER(ctypes.POINTER(ctypes.c_char))]
+
+        argc = len(args)
+        argv = ctypes.c_char_p * (argc+1)
+        
+        return _main(argc, argv(*[ctypes.c_char_p(arg.encode('utf-8')) for arg in args]))
+
+
 try:
     from . import wgrib2
     WGRIB2_SUPPORT = True
@@ -96,31 +121,8 @@ class OutputGrabber(object):
                 break
             self.capturedtext += str(char)
 
-# _dir = os.path.abspath(os.path.dirname(__file__))
-
-# if sys.platform.startswith('win'):
-#     lib_prefix = ''
-#     lib_ext = '.dll'
-# else:
-#     lib_prefix = 'lib'
-#     lib_ext = '.so'
-
-# _lib = ctypes.CDLL(os.path.join(_dir, lib_prefix + 'wgrib' + lib_ext))
-# _main = _lib.wgrib_main
-# _main.restype = ctypes.c_int
-# _main.argtypes = [ctypes.c_int, ctypes.POINTER(ctypes.POINTER(ctypes.c_char))]
-
-# def wgrib_main(args=sys.argv):
-#     argc = len(args)
-#     argv = ctypes.c_char_p * (argc+1)
-    
-#     with OutputGrabber(sys.stdout) as stdout:
-#         _main(argc, argv(*[ctypes.c_char_p(arg.encode('utf-8')) for arg in args]))
-#     return stdout.capturedtext
-
-# del lib_prefix, lib_ext, _lib, _main
-
 def grab_output(func, out_stream=sys.stdout, err_stream=sys.stderr):
+    '''Captures low-level (C level) stdout/stderr'''
     @wraps(func)
     def wrapper(*args, **kwargs):
         with OutputGrabber(out_stream) as stdout, \
