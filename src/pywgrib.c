@@ -1,11 +1,6 @@
 /* Dumb Python C extension wrapper around wgrib */
 #include <stdlib.h>
-
-#if defined(__APPLE__) && defined(__MACH__)
-#include <Python/Python.h>
-#else
 #include <Python.h>
-#endif
 
 // forward declare wgrib entry point
 int wgrib(int argc, char **argv);

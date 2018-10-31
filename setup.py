@@ -24,6 +24,12 @@ from setuptools import find_packages, setup
 from distutils.errors import LinkError, CompileError
 from numpy.distutils.core import Extension
 
+from distutils.sysconfig import get_python_inc
+
+PATH_LIST_SEP = ':' if not sys.platform.startswith('win') else ';'
+PYTHON_INCLUDE_PATH = os.environ.get('C_INCLUDE_PATH',
+                                     '') + PATH_LIST_SEP + get_python_inc()
+os.environ['C_INCLUDE_PATH'] = PYTHON_INCLUDE_PATH
 
 # default is to build and install
 if len(sys.argv) < 2:
