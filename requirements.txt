@@ -1,5 +1,5 @@
 numpy
-six
+six==1.13.0
 futures; python_version == "2.7"
 contextlib2; python_version <= "3.4"
 glob2; python_version <= "3.4"
