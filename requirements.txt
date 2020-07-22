@@ -1,4 +1,4 @@
-numpy
+numpy==1.19.1
 six
 futures; python_version == "2.7"
 contextlib2; python_version <= "3.4"
